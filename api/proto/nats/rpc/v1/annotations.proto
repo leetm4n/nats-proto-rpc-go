@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package nats.rpc.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/leetm4n/nats-proto-rpc-go/m/api/proto/nats/rpc/v1;natsrpcv1";
+
+extend google.protobuf.FileOptions {
+    // Flags if services within proto file are targets of generation
+    bool isFileGenerationTarget = 133337;
+}
+
+extend google.protobuf.ServiceOptions {
+	// Flags if service is target of generation
+	bool isServiceGenerationTarget = 133338;
+}

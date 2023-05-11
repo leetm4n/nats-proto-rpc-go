@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package example.service.v1;
+
+option go_package = "github.com/leetm4n/nats-proto-rpc-go/m/examples/proto/example/service/v1;exampleservicev1";
+
+import "validate/validate.proto";
+import "nats/rpc/v1/annotations.proto";
+
+option (nats.rpc.v1.isFileGenerationTarget) = true;
+
+service TestService {
+    option (nats.rpc.v1.isServiceGenerationTarget) = true;
+
+    // Allows an authorised user to send a message to another user
+    rpc SendMessage(SendMessageRequest) returns (SendMessageResponse) {}
+}
+
+message SendMessageRequest {
+    // The message itself
+    string message = 1 [(validate.rules).string.min_len = 1];
+    // The recipient email of the message
+    string recipient_id = 2 [(validate.rules).string.uuid = true];
+}
+
+message SendMessageResponse {
+    // The ID of the message sent
+    string id = 1 [(validate.rules).string.uuid = true];
+}

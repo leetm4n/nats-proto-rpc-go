@@ -19,3 +19,9 @@
 
 # Go workspace file
 go.work
+
+bin
+
+# Generated go files
+*.pb.go
+*.pb.*.go
