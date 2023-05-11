@@ -33,4 +33,4 @@ codegen-proto-example-local:
 .PHONY: build-codegenerator
 build-codegenerator:
 	@printf $(COLOR) "Building generator plugin..."
-	@go build -o bin/ ./protoc-gen-natsrpcgo
+	@go build -o bin/ ./cmd/protoc-gen-natsrpcgo
