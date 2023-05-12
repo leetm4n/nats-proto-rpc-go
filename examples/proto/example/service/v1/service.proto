@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package example.service.v1;
 
-option go_package = "github.com/leetm4n/nats-proto-rpc-go/m/examples/proto/example/service/v1;exampleservicev1";
+option go_package = "github.com/leetm4n/nats-proto-rpc-go/examples/proto/example/service/v1;exampleservicev1";
 
 import "validate/validate.proto";
 import "nats/rpc/v1/annotations.proto";

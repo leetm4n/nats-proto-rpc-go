@@ -4,7 +4,7 @@ package nats.rpc.v1;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "github.com/leetm4n/nats-proto-rpc-go/m/api/proto/nats/rpc/v1;natsrpcv1";
+option go_package = "github.com/leetm4n/nats-proto-rpc-go/api/proto/nats/rpc/v1;natsrpcv1";
 
 extend google.protobuf.FileOptions {
     // Flags if services within proto file are targets of generation

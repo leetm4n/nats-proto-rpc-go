@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode"
 
-	natsrpcv1 "github.com/leetm4n/nats-proto-rpc-go/m/api/proto/nats/rpc/v1"
+	natsrpcv1 "github.com/leetm4n/nats-proto-rpc-go/api/proto/nats/rpc/v1"
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
@@ -33,10 +33,10 @@ func generateFile(gen *protogen.Plugin, protoFile *protogen.File, isValidatorEna
 			"context",
 			"github.com/nats-io/nats.go",
 			"github.com/nats-io/nats.go/micro",
-			"github.com/leetm4n/nats-proto-rpc-go/m/pkg/correlation",
-			"github.com/leetm4n/nats-proto-rpc-go/m/pkg/runnable",
-			"github.com/leetm4n/nats-proto-rpc-go/m/pkg/client",
-			"github.com/leetm4n/nats-proto-rpc-go/m/pkg/subject",
+			"github.com/leetm4n/nats-proto-rpc-go/pkg/correlation",
+			"github.com/leetm4n/nats-proto-rpc-go/pkg/runnable",
+			"github.com/leetm4n/nats-proto-rpc-go/pkg/client",
+			"github.com/leetm4n/nats-proto-rpc-go/pkg/subject",
 		},
 	)
 	addEmptyLine(generatedFile)

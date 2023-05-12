@@ -1,4 +1,4 @@
-module github.com/leetm4n/nats-proto-rpc-go/m
+module github.com/leetm4n/nats-proto-rpc-go
 
 go 1.20
 
