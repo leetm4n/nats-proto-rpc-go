@@ -23,5 +23,5 @@ go.work
 bin
 
 # Generated go files
-*.pb.go
-*.pb.*.go
+examples/**/*.pb.go
+examples/**/*.pb.*.go
