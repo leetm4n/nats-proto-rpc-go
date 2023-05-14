@@ -220,7 +220,7 @@ func (g *generator) addServiceServerRunnableImplementation(service *protogen.Ser
 func (g *generator) addServiceServerRunnableImplStruct(service *protogen.Service) {
 	g.gen.P(fmt.Sprintf("type %sServerRunnable struct {", firstLetterToLower(service.GoName)))
 	g.gen.P(fmt.Sprintf("  %sServer %sServer", firstLetterToLower(service.GoName), service.GoName))
-	g.gen.P("  service *micro.Service")
+	g.gen.P("  service micro.Service")
 	g.gen.P("  natsConnection      *nats.Conn")
 	g.gen.P("  encoder             encoder.Encoder")
 	g.gen.P("  isValidationEnabled bool")
@@ -243,6 +243,7 @@ func (g *generator) addServiceServerRunnableImpl(service *protogen.Service) {
 	g.gen.P("  if err != nil {")
 	g.gen.P("    return err")
 	g.gen.P("  }")
+	g.gen.P("  s.service = service")
 	for _, method := range service.Methods {
 		g.gen.P(fmt.Sprintf("  %sSubject := s.getSubject(\"%s\", \"%s\", s.subjectPrefix)", firstLetterToLower(method.GoName), g.getServiceSubject(service), g.getMethodSubject(method)))
 		g.gen.P(fmt.Sprintf("  %sSchema, err := json.Marshal(*jsonschema.Reflect(%s{}))", firstLetterToLower(method.Input.GoIdent.GoName), method.Input.GoIdent.GoName))
@@ -315,7 +316,7 @@ func (g *generator) addServiceServerRunnableImpl(service *protogen.Service) {
 	g.gen.P("  return nil")
 	g.gen.P("}")
 	g.addEmptyLine()
-	g.gen.P(fmt.Sprintf("func (s *%sServerRunnable) GetNatsMicroService() *micro.Service {", firstLetterToLower(service.GoName)))
+	g.gen.P(fmt.Sprintf("func (s *%sServerRunnable) GetNatsMicroService() micro.Service {", firstLetterToLower(service.GoName)))
 	g.gen.P("  return s.service")
 	g.gen.P("}")
 }

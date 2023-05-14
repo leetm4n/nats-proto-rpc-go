@@ -111,7 +111,7 @@ func NewTestServiceClient(options client.Options) TestServiceClient {
 
 type testServiceServerRunnable struct {
 	testServiceServer   TestServiceServer
-	service             *micro.Service
+	service             micro.Service
 	natsConnection      *nats.Conn
 	encoder             encoder.Encoder
 	isValidationEnabled bool
@@ -132,6 +132,7 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	s.service = service
 	sendMessageSubject := s.getSubject("customname", "sendmessage", s.subjectPrefix)
 	sendMessageRequestSchema, err := json.Marshal(*jsonschema.Reflect(SendMessageRequest{}))
 	if err != nil {
@@ -261,7 +262,7 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 	return nil
 }
 
-func (s *testServiceServerRunnable) GetNatsMicroService() *micro.Service {
+func (s *testServiceServerRunnable) GetNatsMicroService() micro.Service {
 	return s.service
 }
 

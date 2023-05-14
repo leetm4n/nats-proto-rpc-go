@@ -11,7 +11,7 @@ import (
 
 type Runnable interface {
 	Run(ctx context.Context) error
-	GetNatsMicroService() *micro.Service
+	GetNatsMicroService() micro.Service
 }
 
 type Options struct {
