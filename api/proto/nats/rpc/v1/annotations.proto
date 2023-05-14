@@ -14,4 +14,13 @@ extend google.protobuf.FileOptions {
 extend google.protobuf.ServiceOptions {
 	// Flags if service is target of generation
 	bool isServiceGenerationTarget = 133338;
+    // Setting this will set the nats micro.service version
+	string serviceVersion = 133339;
+    // Overrides default subject name of service
+    string serviceSubject = 133340;
+}
+
+extend google.protobuf.MethodOptions {
+    // Overrides default subject name of method
+    string methodSubject = 133341;
 }

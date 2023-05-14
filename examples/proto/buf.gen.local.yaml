@@ -10,4 +10,4 @@ plugins:
     opt: paths=source_relative
   - plugin: natsrpcgo
     out: .
-    opt: paths=source_relative,validator=true
+    opt: paths=source_relative,with_pb_validate=true

@@ -9,13 +9,21 @@ import "nats/rpc/v1/annotations.proto";
 
 option (nats.rpc.v1.isFileGenerationTarget) = true;
 
+// TestService is a service with one method
 service TestService {
+    option (nats.rpc.v1.serviceSubject) = "customname";
+    option (nats.rpc.v1.serviceVersion) = "v1";
     option (nats.rpc.v1.isServiceGenerationTarget) = true;
-
-    // Allows an authorised user to send a message to another user
+    // SendMessage is used to send a message to a recepient by id
     rpc SendMessage(SendMessageRequest) returns (SendMessageResponse) {}
+
+    // GetMessage is used to get a message by id
+    rpc GetMessage(GetMessageRequest) returns (GetMessageResponse) {
+        option (nats.rpc.v1.methodSubject) = "fetchmessage";
+    }
 }
 
+// SendMessageRequest is the request for SendMessage
 message SendMessageRequest {
     // The message itself
     string message = 1 [(validate.rules).string.min_len = 1];
@@ -23,7 +31,22 @@ message SendMessageRequest {
     string recipient_id = 2 [(validate.rules).string.uuid = true];
 }
 
+// SendMessageResponse is the response of SendMessage
 message SendMessageResponse {
-    // The ID of the message sent
+    // The id of the message sent
     string id = 1 [(validate.rules).string.uuid = true];
+}
+
+// GetMessageRequest is the request for GetMessage
+message GetMessageRequest {
+    // The message id itself
+    string id = 1 [(validate.rules).string.uuid = true];
+}
+
+// GetMessageResponse is the response of GetMessage
+message GetMessageResponse {
+    // The id of the message
+    string id = 1 [(validate.rules).string.uuid = true];
+    // The message itself
+    string message = 2 [(validate.rules).string.min_len = 1];
 }

@@ -2,14 +2,11 @@ package subject
 
 import "testing"
 
-var subjectPrefix string = "app.us-east1"
-var subjectPrefixEmptyString string = ""
-
 func TestGetSubject(t *testing.T) {
 	type args struct {
 		serviceName   string
 		methodName    string
-		subjectPrefix *string
+		subjectPrefix string
 	}
 	tests := []struct {
 		name string
@@ -17,20 +14,11 @@ func TestGetSubject(t *testing.T) {
 		want string
 	}{
 		{
-			name: "should get without subject prefix given",
-			args: args{
-				serviceName:   "service",
-				methodName:    "method",
-				subjectPrefix: nil,
-			},
-			want: "service.rpc.method",
-		},
-		{
 			name: "should get with empty subject prefix string given",
 			args: args{
 				serviceName:   "service",
 				methodName:    "method",
-				subjectPrefix: &subjectPrefixEmptyString,
+				subjectPrefix: "",
 			},
 			want: "service.rpc.method",
 		},
@@ -39,7 +27,7 @@ func TestGetSubject(t *testing.T) {
 			args: args{
 				serviceName:   "service",
 				methodName:    "method",
-				subjectPrefix: &subjectPrefix,
+				subjectPrefix: "app.us-east1",
 			},
 			want: "app.us-east1.service.rpc.method",
 		},

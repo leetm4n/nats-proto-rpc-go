@@ -3,6 +3,8 @@ package runnable
 import (
 	"context"
 
+	"github.com/leetm4n/nats-proto-rpc-go/pkg/encoder"
+	"github.com/leetm4n/nats-proto-rpc-go/pkg/subject"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/micro"
 )
@@ -13,10 +15,14 @@ type Runnable interface {
 }
 
 type Options struct {
-	Encoder             nats.Encoder
+	NatsConnection      *nats.Conn
+	Encoder             encoder.Encoder
 	IsValidationEnabled bool
 	ErrorMapper         ErrorMapper
-	SubjectPrefix       *string
+	ErrorHandler        micro.ErrHandler
+	DoneHandler         micro.DoneHandler
+	SubjectPrefix       string
+	GetSubject          subject.GetSubjectFn
 }
 
 type ErrorMapper func(err error) (code string, description string)
