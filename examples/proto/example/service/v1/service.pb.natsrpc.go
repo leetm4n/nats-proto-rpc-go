@@ -143,7 +143,7 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 		return err
 	}
 	if err := service.AddEndpoint(
-		sendMessageSubject,
+		"sendmessage",
 		micro.ContextHandler(
 			ctx,
 			func(ctx context.Context, request micro.Request) {
@@ -193,6 +193,7 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 			Request:  string(sendMessageRequestSchema),
 			Response: string(sendMessageResponseSchema),
 		}),
+		micro.WithEndpointSubject(sendMessageSubject),
 	); err != nil {
 		return err
 	}
@@ -206,7 +207,7 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 		return err
 	}
 	if err := service.AddEndpoint(
-		getMessageSubject,
+		"fetchmessage",
 		micro.ContextHandler(
 			ctx,
 			func(ctx context.Context, request micro.Request) {
@@ -256,6 +257,7 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 			Request:  string(getMessageRequestSchema),
 			Response: string(getMessageResponseSchema),
 		}),
+		micro.WithEndpointSubject(getMessageSubject),
 	); err != nil {
 		return err
 	}
