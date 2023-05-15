@@ -10,11 +10,15 @@ import (
 	"github.com/alecthomas/jsonschema"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/micro"
-	"github.com/opentracing/opentracing-go"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/attribute"
 	"github.com/leetm4n/nats-proto-rpc-go/pkg/runnable"
 	"github.com/leetm4n/nats-proto-rpc-go/pkg/client"
 	"github.com/leetm4n/nats-proto-rpc-go/pkg/encoder"
 	"github.com/leetm4n/nats-proto-rpc-go/pkg/subject"
+	"github.com/leetm4n/nats-proto-rpc-go/pkg/telemetry"
 )
 
 type TestServiceServer interface {
@@ -34,81 +38,114 @@ type testServiceClient struct {
 	getSubject          subject.GetSubjectFn
 	timeout             time.Duration
 	errorDecoder        client.ErrorDecoderFn
-	tracer              opentracing.Tracer
+	tracer              trace.Tracer
+	propagator          propagation.TextMapPropagator
 }
 
 func (c *testServiceClient) SendMessage(ctx context.Context, req *SendMessageRequest, subjectPrefix string) (*SendMessageResponse, error) {
-	var header nats.Header
-	if c.tracer != nil {
-		currentSpan := opentracing.SpanFromContext(ctx)
-		span := c.tracer.StartSpan("sendmessage", opentracing.ChildOf(currentSpan.Context()))
-		defer span.Finish()
-		c.tracer.Inject(span.Context(), opentracing.HTTPHeaders, header)
-	}
+	header := telemetry.NatsHeaderCarrier{}
+	ctx, span := c.tracer.Start(ctx, "sendmessage", trace.WithSpanKind(trace.SpanKindClient))
+	defer span.End()
+	c.propagator.Inject(ctx, header)
 	subject := c.getSubject("customname", "sendmessage", subjectPrefix)
-	if c.isValidationEnabled {
-		if err := req.ValidateAll(); err != nil {
+	if span.IsRecording() {
+		span.SetAttributes(
+			attribute.String("nats.serviceVersion", "1.0.0"),
+			attribute.String("nats.service", "customname"),
+			attribute.String("nats.endpoint", "sendmessage"),
+			attribute.String("nats.subject", subject),
+		)
+	}
+	handler := func(ctx context.Context) (*SendMessageResponse, error) {
+		if c.isValidationEnabled {
+			if err := req.ValidateAll(); err != nil {
+				return nil, err
+			}
+		}
+		encoded, err := c.encoder.Encode(subject, req)
+		if err != nil {
 			return nil, err
 		}
-	}
-	encoded, err := c.encoder.Encode(subject, req)
-	if err != nil {
-		return nil, err
-	}
-	msg, err := c.natsConnection.RequestMsg(&nats.Msg{Subject: subject, Data: encoded, Header: header}, c.timeout)
-	if err != nil {
-		return nil, err
-	}
-	if err := client.DecodeErrorFromHeaderWithDecoder(msg.Header, c.errorDecoder); err != nil {
-		return nil, err
-	}
-	res := new(SendMessageResponse)
-	if err := c.encoder.Decode(subject, msg.Data, res); err != nil {
-		return nil, err
-	}
-	if c.isValidationEnabled {
-		if err := res.ValidateAll(); err != nil {
+		timeoutCtx, cancel := context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+		msg, err := c.natsConnection.RequestMsgWithContext(timeoutCtx, &nats.Msg{Subject: subject, Data: encoded, Header: header.GetNatsHeader()})
+		if err != nil {
 			return nil, err
 		}
+		if err := client.DecodeErrorFromHeaderWithDecoder(msg.Header, c.errorDecoder); err != nil {
+			return nil, err
+		}
+		res := new(SendMessageResponse)
+		if err := c.encoder.Decode(subject, msg.Data, res); err != nil {
+			return nil, err
+		}
+		if c.isValidationEnabled {
+			if err := res.ValidateAll(); err != nil {
+				return nil, err
+			}
+		}
+		return res, nil
 	}
-	return res, nil
+	result, err := handler(ctx)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	return result, nil
 }
 
 func (c *testServiceClient) GetMessage(ctx context.Context, req *GetMessageRequest, subjectPrefix string) (*GetMessageResponse, error) {
-	var header nats.Header
-	if c.tracer != nil {
-		currentSpan := opentracing.SpanFromContext(ctx)
-		span := c.tracer.StartSpan("fetchmessage", opentracing.ChildOf(currentSpan.Context()))
-		defer span.Finish()
-		c.tracer.Inject(span.Context(), opentracing.HTTPHeaders, header)
-	}
+	header := telemetry.NatsHeaderCarrier{}
+	ctx, span := c.tracer.Start(ctx, "fetchmessage", trace.WithSpanKind(trace.SpanKindClient))
+	defer span.End()
+	c.propagator.Inject(ctx, header)
 	subject := c.getSubject("customname", "fetchmessage", subjectPrefix)
-	if c.isValidationEnabled {
-		if err := req.ValidateAll(); err != nil {
+	if span.IsRecording() {
+		span.SetAttributes(
+			attribute.String("nats.serviceVersion", "1.0.0"),
+			attribute.String("nats.service", "customname"),
+			attribute.String("nats.endpoint", "fetchmessage"),
+			attribute.String("nats.subject", subject),
+		)
+	}
+	handler := func(ctx context.Context) (*GetMessageResponse, error) {
+		if c.isValidationEnabled {
+			if err := req.ValidateAll(); err != nil {
+				return nil, err
+			}
+		}
+		encoded, err := c.encoder.Encode(subject, req)
+		if err != nil {
 			return nil, err
 		}
-	}
-	encoded, err := c.encoder.Encode(subject, req)
-	if err != nil {
-		return nil, err
-	}
-	msg, err := c.natsConnection.RequestMsg(&nats.Msg{Subject: subject, Data: encoded, Header: header}, c.timeout)
-	if err != nil {
-		return nil, err
-	}
-	if err := client.DecodeErrorFromHeaderWithDecoder(msg.Header, c.errorDecoder); err != nil {
-		return nil, err
-	}
-	res := new(GetMessageResponse)
-	if err := c.encoder.Decode(subject, msg.Data, res); err != nil {
-		return nil, err
-	}
-	if c.isValidationEnabled {
-		if err := res.ValidateAll(); err != nil {
+		timeoutCtx, cancel := context.WithTimeout(ctx, c.timeout)
+		defer cancel()
+		msg, err := c.natsConnection.RequestMsgWithContext(timeoutCtx, &nats.Msg{Subject: subject, Data: encoded, Header: header.GetNatsHeader()})
+		if err != nil {
 			return nil, err
 		}
+		if err := client.DecodeErrorFromHeaderWithDecoder(msg.Header, c.errorDecoder); err != nil {
+			return nil, err
+		}
+		res := new(GetMessageResponse)
+		if err := c.encoder.Decode(subject, msg.Data, res); err != nil {
+			return nil, err
+		}
+		if c.isValidationEnabled {
+			if err := res.ValidateAll(); err != nil {
+				return nil, err
+			}
+		}
+		return res, nil
 	}
-	return res, nil
+	result, err := handler(ctx)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	return result, nil
 }
 
 func NewTestServiceClient(options client.Options) TestServiceClient {
@@ -119,7 +156,8 @@ func NewTestServiceClient(options client.Options) TestServiceClient {
 		getSubject:          options.GetSubject,
 		timeout:             options.Timeout,
 		errorDecoder:        options.ErrorDecoder,
-		tracer:              options.Tracer,
+		tracer:              options.Telemetry.Tracer,
+		propagator:          options.Telemetry.Propagator,
 	}
 }
 
@@ -136,7 +174,8 @@ type testServiceServerRunnable struct {
 	endpointAddHandler  runnable.EndpointAddHandlerFn
 	subjectPrefix       string
 	getSubject          subject.GetSubjectFn
-	tracer              opentracing.Tracer
+	tracer              trace.Tracer
+	propagator          propagation.TextMapPropagator
 }
 
 func (s *testServiceServerRunnable) Run(ctx context.Context) error {
@@ -167,14 +206,16 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 		micro.ContextHandler(
 			ctx,
 			func(ctx context.Context, request micro.Request) {
-				ctxWithSpan := ctx
-				if s.tracer != nil {
-					spanCtx, err := s.tracer.Extract(opentracing.HTTPHeaders, request.Headers())
-					if err == nil {
-						span := s.tracer.StartSpan("sendmessage", opentracing.ChildOf(spanCtx))
-						defer span.Finish()
-						ctxWithSpan = opentracing.ContextWithSpan(ctx, span)
-					}
+				ctx, span := s.tracer.Start(ctx, "sendmessage", trace.WithSpanKind(trace.SpanKindServer))
+				defer span.End()
+				ctxWithSpan := s.propagator.Extract(ctx, telemetry.NatsHeaderCarrierFromNatsHeader(request.Headers()))
+				if span.IsRecording() {
+					span.SetAttributes(
+						attribute.String("nats.serviceVersion", "1.0.0"),
+						attribute.String("nats.service", "customname"),
+						attribute.String("nats.endpoint", "sendmessage"),
+						attribute.String("nats.subject", sendMessageSubject),
+					)
 				}
 				handler := func(ctx context.Context, request micro.Request) ([]byte, error) {
 					select {
@@ -208,6 +249,8 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 				}
 				payload, err := handler(ctxWithSpan, request)
 				if err != nil {
+					span.RecordError(err)
+					span.SetStatus(codes.Error, err.Error())
 					code, description := s.errorEncoder(err)
 					request.Error(code, description, nil)
 				}
@@ -239,14 +282,16 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 		micro.ContextHandler(
 			ctx,
 			func(ctx context.Context, request micro.Request) {
-				ctxWithSpan := ctx
-				if s.tracer != nil {
-					spanCtx, err := s.tracer.Extract(opentracing.HTTPHeaders, request.Headers())
-					if err == nil {
-						span := s.tracer.StartSpan("fetchmessage", opentracing.ChildOf(spanCtx))
-						defer span.Finish()
-						ctxWithSpan = opentracing.ContextWithSpan(ctx, span)
-					}
+				ctx, span := s.tracer.Start(ctx, "fetchmessage", trace.WithSpanKind(trace.SpanKindServer))
+				defer span.End()
+				ctxWithSpan := s.propagator.Extract(ctx, telemetry.NatsHeaderCarrierFromNatsHeader(request.Headers()))
+				if span.IsRecording() {
+					span.SetAttributes(
+						attribute.String("nats.serviceVersion", "1.0.0"),
+						attribute.String("nats.service", "customname"),
+						attribute.String("nats.endpoint", "fetchmessage"),
+						attribute.String("nats.subject", getMessageSubject),
+					)
 				}
 				handler := func(ctx context.Context, request micro.Request) ([]byte, error) {
 					select {
@@ -280,6 +325,8 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 				}
 				payload, err := handler(ctxWithSpan, request)
 				if err != nil {
+					span.RecordError(err)
+					span.SetStatus(codes.Error, err.Error())
 					code, description := s.errorEncoder(err)
 					request.Error(code, description, nil)
 				}
@@ -320,5 +367,7 @@ func NewTestServiceRunnable(
 		subjectPrefix:       options.SubjectPrefix,
 		endpointAddHandler:  options.Hooks.EndpointAddHandler,
 		getSubject:          options.GetSubject,
+		propagator:          options.Telemetry.Propagator,
+		tracer:              options.Telemetry.Tracer,
 	}
 }
