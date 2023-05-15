@@ -12,7 +12,7 @@ option (nats.rpc.v1.isFileGenerationTarget) = true;
 // TestService is a service with one method
 service TestService {
     option (nats.rpc.v1.serviceSubject) = "customname";
-    option (nats.rpc.v1.serviceVersion) = "v1";
+    option (nats.rpc.v1.serviceVersion) = "1.0.0";
     option (nats.rpc.v1.isServiceGenerationTarget) = true;
     // SendMessage is used to send a message to a recepient by id
     rpc SendMessage(SendMessageRequest) returns (SendMessageResponse) {}

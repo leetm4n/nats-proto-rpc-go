@@ -18,11 +18,11 @@ type Options struct {
 	NatsConnection      *nats.Conn
 	Encoder             encoder.Encoder
 	IsValidationEnabled bool
-	ErrorMapper         ErrorMapper
+	ErrorEncoder        ErrorEncoderFn
 	ErrorHandler        micro.ErrHandler
 	DoneHandler         micro.DoneHandler
 	SubjectPrefix       string
 	GetSubject          subject.GetSubjectFn
 }
 
-type ErrorMapper func(err error) (code string, description string)
+type ErrorEncoderFn func(err error) (code string, description string)

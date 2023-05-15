@@ -33,6 +33,7 @@ type testServiceClient struct {
 	isValidationEnabled bool
 	getSubject          subject.GetSubjectFn
 	timeout             time.Duration
+	errorDecoder        client.ErrorDecoderFn
 }
 
 func (c *testServiceClient) SendMessage(ctx context.Context, req *SendMessageRequest, subjectPrefix string) (*SendMessageResponse, error) {
@@ -55,14 +56,29 @@ func (c *testServiceClient) SendMessage(ctx context.Context, req *SendMessageReq
 	if err != nil {
 		return nil, err
 	}
+	if err := client.DecodeErrorFromHeaderWithDecoder(msg.Header, c.errorDecoder); err != nil {
+		if err := msg.Term(); err != nil {
+			return nil, err
+		}
+		return nil, err
+	}
 	res := new(SendMessageResponse)
 	if err := c.encoder.Decode(subject, msg.Data, res); err != nil {
+		if err := msg.Term(); err != nil {
+			return nil, err
+		}
 		return nil, err
 	}
 	if c.isValidationEnabled {
 		if err := res.ValidateAll(); err != nil {
+			if err := msg.Term(); err != nil {
+				return nil, err
+			}
 			return nil, err
 		}
+	}
+	if err := msg.Ack(); err != nil {
+		return nil, err
 	}
 	return res, nil
 }
@@ -87,14 +103,29 @@ func (c *testServiceClient) GetMessage(ctx context.Context, req *GetMessageReque
 	if err != nil {
 		return nil, err
 	}
+	if err := client.DecodeErrorFromHeaderWithDecoder(msg.Header, c.errorDecoder); err != nil {
+		if err := msg.Term(); err != nil {
+			return nil, err
+		}
+		return nil, err
+	}
 	res := new(GetMessageResponse)
 	if err := c.encoder.Decode(subject, msg.Data, res); err != nil {
+		if err := msg.Term(); err != nil {
+			return nil, err
+		}
 		return nil, err
 	}
 	if c.isValidationEnabled {
 		if err := res.ValidateAll(); err != nil {
+			if err := msg.Term(); err != nil {
+				return nil, err
+			}
 			return nil, err
 		}
+	}
+	if err := msg.Ack(); err != nil {
+		return nil, err
 	}
 	return res, nil
 }
@@ -106,6 +137,7 @@ func NewTestServiceClient(options client.Options) TestServiceClient {
 		isValidationEnabled: options.IsValidationEnabled,
 		getSubject:          options.GetSubject,
 		timeout:             options.Timeout,
+		errorDecoder:        options.ErrorDecoder,
 	}
 }
 
@@ -115,7 +147,7 @@ type testServiceServerRunnable struct {
 	natsConnection      *nats.Conn
 	encoder             encoder.Encoder
 	isValidationEnabled bool
-	errorMapper         runnable.ErrorMapper
+	errorEncoder        runnable.ErrorEncoderFn
 	errorHandler        micro.ErrHandler
 	doneHandler         micro.DoneHandler
 	subjectPrefix       string
@@ -125,7 +157,7 @@ type testServiceServerRunnable struct {
 func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 	service, err := micro.AddService(s.natsConnection, micro.Config{
 		Name:         "customname",
-		Version:      "v1",
+		Version:      "1.0.0",
 		ErrorHandler: s.errorHandler,
 		DoneHandler:  s.doneHandler,
 	})
@@ -147,46 +179,42 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 		micro.ContextHandler(
 			ctx,
 			func(ctx context.Context, request micro.Request) {
-				select {
-				case <-ctx.Done():
-					code, description := s.errorMapper(ctx.Err())
-					request.Error(code, description, nil)
-					return
-				default:
-					req := new(SendMessageRequest)
-					if err := s.encoder.Decode(sendMessageSubject, request.Data(), req); err != nil {
-						code, description := s.errorMapper(err)
-						request.Error(code, description, nil)
-						return
-					}
-					if s.isValidationEnabled {
-						if err := req.ValidateAll(); err != nil {
-							code, description := s.errorMapper(err)
-							request.Error(code, description, nil)
-							return
+				handler := func(ctx context.Context, request micro.Request) ([]byte, error) {
+					select {
+					case <-ctx.Done():
+						return nil, ctx.Err()
+					default:
+						req := new(SendMessageRequest)
+						if err := s.encoder.Decode(sendMessageSubject, request.Data(), req); err != nil {
+							return nil, err
 						}
-					}
-					res, err := s.testServiceServer.SendMessage(ctx, req)
-					if err != nil {
-						code, description := s.errorMapper(err)
-						request.Error(code, description, nil)
-						return
-					}
-					if s.isValidationEnabled {
-						if err := res.ValidateAll(); err != nil {
-							code, description := s.errorMapper(err)
-							request.Error(code, description, nil)
-							return
+						if s.isValidationEnabled {
+							if err := req.ValidateAll(); err != nil {
+								return nil, err
+							}
 						}
+						res, err := s.testServiceServer.SendMessage(ctx, req)
+						if err != nil {
+							return nil, err
+						}
+						if s.isValidationEnabled {
+							if err := res.ValidateAll(); err != nil {
+								return nil, err
+							}
+						}
+						payload, err := s.encoder.Encode(sendMessageSubject, res)
+						if err != nil {
+							return nil, err
+						}
+						return payload, nil
 					}
-					payload, err := s.encoder.Encode(sendMessageSubject, res)
-					if err != nil {
-						code, description := s.errorMapper(err)
-						request.Error(code, description, nil)
-						return
-					}
-					request.Respond(payload)
 				}
+				payload, err := handler(ctx, request)
+				if err != nil {
+					code, description := s.errorEncoder(err)
+					request.Error(code, description, nil)
+				}
+				request.Respond(payload)
 			},
 		),
 		micro.WithEndpointSchema(&micro.Schema{
@@ -211,46 +239,42 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 		micro.ContextHandler(
 			ctx,
 			func(ctx context.Context, request micro.Request) {
-				select {
-				case <-ctx.Done():
-					code, description := s.errorMapper(ctx.Err())
-					request.Error(code, description, nil)
-					return
-				default:
-					req := new(GetMessageRequest)
-					if err := s.encoder.Decode(getMessageSubject, request.Data(), req); err != nil {
-						code, description := s.errorMapper(err)
-						request.Error(code, description, nil)
-						return
-					}
-					if s.isValidationEnabled {
-						if err := req.ValidateAll(); err != nil {
-							code, description := s.errorMapper(err)
-							request.Error(code, description, nil)
-							return
+				handler := func(ctx context.Context, request micro.Request) ([]byte, error) {
+					select {
+					case <-ctx.Done():
+						return nil, ctx.Err()
+					default:
+						req := new(GetMessageRequest)
+						if err := s.encoder.Decode(getMessageSubject, request.Data(), req); err != nil {
+							return nil, err
 						}
-					}
-					res, err := s.testServiceServer.GetMessage(ctx, req)
-					if err != nil {
-						code, description := s.errorMapper(err)
-						request.Error(code, description, nil)
-						return
-					}
-					if s.isValidationEnabled {
-						if err := res.ValidateAll(); err != nil {
-							code, description := s.errorMapper(err)
-							request.Error(code, description, nil)
-							return
+						if s.isValidationEnabled {
+							if err := req.ValidateAll(); err != nil {
+								return nil, err
+							}
 						}
+						res, err := s.testServiceServer.GetMessage(ctx, req)
+						if err != nil {
+							return nil, err
+						}
+						if s.isValidationEnabled {
+							if err := res.ValidateAll(); err != nil {
+								return nil, err
+							}
+						}
+						payload, err := s.encoder.Encode(getMessageSubject, res)
+						if err != nil {
+							return nil, err
+						}
+						return payload, nil
 					}
-					payload, err := s.encoder.Encode(getMessageSubject, res)
-					if err != nil {
-						code, description := s.errorMapper(err)
-						request.Error(code, description, nil)
-						return
-					}
-					request.Respond(payload)
 				}
+				payload, err := handler(ctx, request)
+				if err != nil {
+					code, description := s.errorEncoder(err)
+					request.Error(code, description, nil)
+				}
+				request.Respond(payload)
 			},
 		),
 		micro.WithEndpointSchema(&micro.Schema{
@@ -277,7 +301,7 @@ func NewTestServiceRunnable(
 		natsConnection:      options.NatsConnection,
 		encoder:             options.Encoder,
 		isValidationEnabled: options.IsValidationEnabled,
-		errorMapper:         options.ErrorMapper,
+		errorEncoder:        options.ErrorEncoder,
 		errorHandler:        options.ErrorHandler,
 		doneHandler:         options.DoneHandler,
 		subjectPrefix:       options.SubjectPrefix,
