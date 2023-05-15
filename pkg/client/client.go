@@ -7,6 +7,7 @@ import (
 	"github.com/leetm4n/nats-proto-rpc-go/pkg/subject"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/micro"
+	"github.com/opentracing/opentracing-go"
 )
 
 type Options struct {
@@ -16,6 +17,7 @@ type Options struct {
 	GetSubject          subject.GetSubjectFn
 	Timeout             time.Duration
 	ErrorDecoder        ErrorDecoderFn
+	Tracer              opentracing.Tracer
 }
 
 type ErrorDecoderFn func(code string, description string) error

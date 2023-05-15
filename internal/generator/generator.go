@@ -37,7 +37,7 @@ func (g *generator) Generate() {
 			"github.com/alecthomas/jsonschema",
 			"github.com/nats-io/nats.go",
 			"github.com/nats-io/nats.go/micro",
-			"github.com/leetm4n/nats-proto-rpc-go/pkg/correlation",
+			"github.com/opentracing/opentracing-go",
 			"github.com/leetm4n/nats-proto-rpc-go/pkg/runnable",
 			"github.com/leetm4n/nats-proto-rpc-go/pkg/client",
 			"github.com/leetm4n/nats-proto-rpc-go/pkg/encoder",
@@ -151,6 +151,13 @@ func (g *generator) addServiceClientImplHandlers(service *protogen.Service) {
 	for _, method := range service.Methods {
 		g.addEmptyLine()
 		g.gen.P(fmt.Sprintf("func (c *%sClient) %s(ctx context.Context, req *%s, subjectPrefix string) (*%s, error) {", firstLetterToLower(service.GoName), method.GoName, method.Input.GoIdent.GoName, method.Output.GoIdent.GoName))
+		g.gen.P("  var header nats.Header")
+		g.gen.P("  if c.tracer != nil {")
+		g.gen.P("    currentSpan := opentracing.SpanFromContext(ctx)")
+		g.gen.P(fmt.Sprintf("    span := c.tracer.StartSpan(\"%s\", opentracing.ChildOf(currentSpan.Context()))", g.getMethodSubject(method)))
+		g.gen.P("    defer span.Finish()")
+		g.gen.P("    c.tracer.Inject(span.Context(), opentracing.HTTPHeaders, header)")
+		g.gen.P("  }")
 		g.gen.P(fmt.Sprintf("  subject := c.getSubject(\"%s\", \"%s\", subjectPrefix)", g.getServiceSubject(service), g.getMethodSubject(method)))
 		if g.isValidatorEnabled {
 			g.gen.P("  if (c.isValidationEnabled) {")
@@ -162,11 +169,6 @@ func (g *generator) addServiceClientImplHandlers(service *protogen.Service) {
 		g.gen.P("  encoded, err := c.encoder.Encode(subject, req)")
 		g.gen.P("  if err != nil {")
 		g.gen.P("    return nil, err")
-		g.gen.P("  }")
-		g.gen.P("  correlationID := correlation.CorrelationIDFromContext(ctx)")
-		g.gen.P("  var header nats.Header")
-		g.gen.P("  if correlationID != \"\" {")
-		g.gen.P("    header.Add(correlation.RequestIDHeaderKey, correlationID)")
 		g.gen.P("  }")
 		g.gen.P("	 msg, err := c.natsConnection.RequestMsg(&nats.Msg{ Subject: subject, Data: encoded, Header: header }, c.timeout)")
 		g.gen.P("  if err != nil {")
@@ -199,6 +201,7 @@ func (g *generator) addServiceClientImplStruct(service *protogen.Service) {
 	g.gen.P("  getSubject subject.GetSubjectFn")
 	g.gen.P("  timeout time.Duration")
 	g.gen.P("  errorDecoder client.ErrorDecoderFn")
+	g.gen.P("  tracer opentracing.Tracer")
 	g.gen.P("}")
 }
 
@@ -211,6 +214,7 @@ func (g *generator) addServiceClientImplementationConstructor(service *protogen.
 	g.gen.P("    getSubject: options.GetSubject,")
 	g.gen.P("    timeout: options.Timeout,")
 	g.gen.P("    errorDecoder: options.ErrorDecoder,")
+	g.gen.P("    tracer: options.Tracer,")
 	g.gen.P("  }")
 	g.gen.P("}")
 }
@@ -232,8 +236,11 @@ func (g *generator) addServiceServerRunnableImplStruct(service *protogen.Service
 	g.gen.P("  errorEncoder        runnable.ErrorEncoderFn")
 	g.gen.P("  errorHandler        micro.ErrHandler")
 	g.gen.P("  doneHandler         micro.DoneHandler")
+	g.gen.P("  startHandler        micro.DoneHandler")
+	g.gen.P("  endpointAddHandler  runnable.EndpointAddHandlerFn")
 	g.gen.P("  subjectPrefix       string")
 	g.gen.P("  getSubject          subject.GetSubjectFn")
+	g.gen.P("  tracer              opentracing.Tracer")
 	g.gen.P("}")
 }
 
@@ -249,6 +256,9 @@ func (g *generator) addServiceServerRunnableImpl(service *protogen.Service) {
 	g.gen.P("    return err")
 	g.gen.P("  }")
 	g.gen.P("  s.service = service")
+	g.gen.P("  if s.startHandler != nil {")
+	g.gen.P("    s.startHandler(service)")
+	g.gen.P("  }")
 	for _, method := range service.Methods {
 		g.gen.P(fmt.Sprintf("  %sSubject := s.getSubject(\"%s\", \"%s\", s.subjectPrefix)", firstLetterToLower(method.GoName), g.getServiceSubject(service), g.getMethodSubject(method)))
 		g.gen.P(fmt.Sprintf("  %sSchema, err := json.Marshal(*jsonschema.Reflect(%s{}))", firstLetterToLower(method.Input.GoIdent.GoName), method.Input.GoIdent.GoName))
@@ -264,6 +274,15 @@ func (g *generator) addServiceServerRunnableImpl(service *protogen.Service) {
 		g.gen.P("    micro.ContextHandler(")
 		g.gen.P("      ctx,")
 		g.gen.P("      func(ctx context.Context, request micro.Request) {")
+		g.gen.P("        ctxWithSpan := ctx")
+		g.gen.P("        if s.tracer != nil {")
+		g.gen.P("          spanCtx, err := s.tracer.Extract(opentracing.HTTPHeaders, request.Headers())")
+		g.gen.P("          if err == nil {")
+		g.gen.P(fmt.Sprintf("            span := s.tracer.StartSpan(\"%s\", opentracing.ChildOf(spanCtx))", g.getMethodSubject(method)))
+		g.gen.P("            defer span.Finish()")
+		g.gen.P("            ctxWithSpan = opentracing.ContextWithSpan(ctx, span)")
+		g.gen.P("          }")
+		g.gen.P("        }")
 		g.gen.P("        handler := func (ctx context.Context, request micro.Request) ([]byte, error) {")
 		g.gen.P("          select {")
 		g.gen.P("          case <-ctx.Done():")
@@ -298,7 +317,7 @@ func (g *generator) addServiceServerRunnableImpl(service *protogen.Service) {
 		g.gen.P("            return payload, nil")
 		g.gen.P("          }")
 		g.gen.P("        }")
-		g.gen.P("        payload, err := handler(ctx, request)")
+		g.gen.P("        payload, err := handler(ctxWithSpan, request)")
 		g.gen.P("        if err != nil {")
 		g.gen.P("          code, description := s.errorEncoder(err)")
 		g.gen.P("          request.Error(code, description, nil)")
@@ -313,6 +332,9 @@ func (g *generator) addServiceServerRunnableImpl(service *protogen.Service) {
 		g.gen.P(fmt.Sprintf("    micro.WithEndpointSubject(%sSubject),", firstLetterToLower(method.GoName)))
 		g.gen.P("  ); err != nil {")
 		g.gen.P("    return err")
+		g.gen.P("  }")
+		g.gen.P("  if s.endpointAddHandler != nil {")
+		g.gen.P(fmt.Sprintf("    s.endpointAddHandler(service, \"%s\", %sSubject)", g.getMethodSubject(method), firstLetterToLower(method.GoName)))
 		g.gen.P("  }")
 	}
 	g.gen.P("  return nil")
@@ -334,9 +356,11 @@ func (g *generator) addServiceServerRunnableConstructor(service *protogen.Servic
 	g.gen.P("    encoder: options.Encoder,")
 	g.gen.P("    isValidationEnabled: options.IsValidationEnabled,")
 	g.gen.P("    errorEncoder: options.ErrorEncoder,")
-	g.gen.P("    errorHandler: options.ErrorHandler,")
-	g.gen.P("    doneHandler: options.DoneHandler,")
+	g.gen.P("    errorHandler: options.Hooks.ErrorHandler,")
+	g.gen.P("    doneHandler: options.Hooks.DoneHandler,")
+	g.gen.P("    startHandler: options.Hooks.StartHandler,")
 	g.gen.P("    subjectPrefix: options.SubjectPrefix,")
+	g.gen.P("    endpointAddHandler: options.Hooks.EndpointAddHandler,")
 	g.gen.P("    getSubject: options.GetSubject,")
 	g.gen.P("  }")
 	g.gen.P("}")

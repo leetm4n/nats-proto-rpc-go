@@ -10,7 +10,7 @@ import (
 	"github.com/alecthomas/jsonschema"
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/micro"
-	"github.com/leetm4n/nats-proto-rpc-go/pkg/correlation"
+	"github.com/opentracing/opentracing-go"
 	"github.com/leetm4n/nats-proto-rpc-go/pkg/runnable"
 	"github.com/leetm4n/nats-proto-rpc-go/pkg/client"
 	"github.com/leetm4n/nats-proto-rpc-go/pkg/encoder"
@@ -34,9 +34,17 @@ type testServiceClient struct {
 	getSubject          subject.GetSubjectFn
 	timeout             time.Duration
 	errorDecoder        client.ErrorDecoderFn
+	tracer              opentracing.Tracer
 }
 
 func (c *testServiceClient) SendMessage(ctx context.Context, req *SendMessageRequest, subjectPrefix string) (*SendMessageResponse, error) {
+	var header nats.Header
+	if c.tracer != nil {
+		currentSpan := opentracing.SpanFromContext(ctx)
+		span := c.tracer.StartSpan("sendmessage", opentracing.ChildOf(currentSpan.Context()))
+		defer span.Finish()
+		c.tracer.Inject(span.Context(), opentracing.HTTPHeaders, header)
+	}
 	subject := c.getSubject("customname", "sendmessage", subjectPrefix)
 	if c.isValidationEnabled {
 		if err := req.ValidateAll(); err != nil {
@@ -47,43 +55,33 @@ func (c *testServiceClient) SendMessage(ctx context.Context, req *SendMessageReq
 	if err != nil {
 		return nil, err
 	}
-	correlationID := correlation.CorrelationIDFromContext(ctx)
-	var header nats.Header
-	if correlationID != "" {
-		header.Add(correlation.RequestIDHeaderKey, correlationID)
-	}
 	msg, err := c.natsConnection.RequestMsg(&nats.Msg{Subject: subject, Data: encoded, Header: header}, c.timeout)
 	if err != nil {
 		return nil, err
 	}
 	if err := client.DecodeErrorFromHeaderWithDecoder(msg.Header, c.errorDecoder); err != nil {
-		if err := msg.Term(); err != nil {
-			return nil, err
-		}
 		return nil, err
 	}
 	res := new(SendMessageResponse)
 	if err := c.encoder.Decode(subject, msg.Data, res); err != nil {
-		if err := msg.Term(); err != nil {
-			return nil, err
-		}
 		return nil, err
 	}
 	if c.isValidationEnabled {
 		if err := res.ValidateAll(); err != nil {
-			if err := msg.Term(); err != nil {
-				return nil, err
-			}
 			return nil, err
 		}
-	}
-	if err := msg.Ack(); err != nil {
-		return nil, err
 	}
 	return res, nil
 }
 
 func (c *testServiceClient) GetMessage(ctx context.Context, req *GetMessageRequest, subjectPrefix string) (*GetMessageResponse, error) {
+	var header nats.Header
+	if c.tracer != nil {
+		currentSpan := opentracing.SpanFromContext(ctx)
+		span := c.tracer.StartSpan("fetchmessage", opentracing.ChildOf(currentSpan.Context()))
+		defer span.Finish()
+		c.tracer.Inject(span.Context(), opentracing.HTTPHeaders, header)
+	}
 	subject := c.getSubject("customname", "fetchmessage", subjectPrefix)
 	if c.isValidationEnabled {
 		if err := req.ValidateAll(); err != nil {
@@ -94,38 +92,21 @@ func (c *testServiceClient) GetMessage(ctx context.Context, req *GetMessageReque
 	if err != nil {
 		return nil, err
 	}
-	correlationID := correlation.CorrelationIDFromContext(ctx)
-	var header nats.Header
-	if correlationID != "" {
-		header.Add(correlation.RequestIDHeaderKey, correlationID)
-	}
 	msg, err := c.natsConnection.RequestMsg(&nats.Msg{Subject: subject, Data: encoded, Header: header}, c.timeout)
 	if err != nil {
 		return nil, err
 	}
 	if err := client.DecodeErrorFromHeaderWithDecoder(msg.Header, c.errorDecoder); err != nil {
-		if err := msg.Term(); err != nil {
-			return nil, err
-		}
 		return nil, err
 	}
 	res := new(GetMessageResponse)
 	if err := c.encoder.Decode(subject, msg.Data, res); err != nil {
-		if err := msg.Term(); err != nil {
-			return nil, err
-		}
 		return nil, err
 	}
 	if c.isValidationEnabled {
 		if err := res.ValidateAll(); err != nil {
-			if err := msg.Term(); err != nil {
-				return nil, err
-			}
 			return nil, err
 		}
-	}
-	if err := msg.Ack(); err != nil {
-		return nil, err
 	}
 	return res, nil
 }
@@ -138,6 +119,7 @@ func NewTestServiceClient(options client.Options) TestServiceClient {
 		getSubject:          options.GetSubject,
 		timeout:             options.Timeout,
 		errorDecoder:        options.ErrorDecoder,
+		tracer:              options.Tracer,
 	}
 }
 
@@ -150,8 +132,11 @@ type testServiceServerRunnable struct {
 	errorEncoder        runnable.ErrorEncoderFn
 	errorHandler        micro.ErrHandler
 	doneHandler         micro.DoneHandler
+	startHandler        micro.DoneHandler
+	endpointAddHandler  runnable.EndpointAddHandlerFn
 	subjectPrefix       string
 	getSubject          subject.GetSubjectFn
+	tracer              opentracing.Tracer
 }
 
 func (s *testServiceServerRunnable) Run(ctx context.Context) error {
@@ -165,6 +150,9 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 		return err
 	}
 	s.service = service
+	if s.startHandler != nil {
+		s.startHandler(service)
+	}
 	sendMessageSubject := s.getSubject("customname", "sendmessage", s.subjectPrefix)
 	sendMessageRequestSchema, err := json.Marshal(*jsonschema.Reflect(SendMessageRequest{}))
 	if err != nil {
@@ -179,6 +167,15 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 		micro.ContextHandler(
 			ctx,
 			func(ctx context.Context, request micro.Request) {
+				ctxWithSpan := ctx
+				if s.tracer != nil {
+					spanCtx, err := s.tracer.Extract(opentracing.HTTPHeaders, request.Headers())
+					if err == nil {
+						span := s.tracer.StartSpan("sendmessage", opentracing.ChildOf(spanCtx))
+						defer span.Finish()
+						ctxWithSpan = opentracing.ContextWithSpan(ctx, span)
+					}
+				}
 				handler := func(ctx context.Context, request micro.Request) ([]byte, error) {
 					select {
 					case <-ctx.Done():
@@ -209,7 +206,7 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 						return payload, nil
 					}
 				}
-				payload, err := handler(ctx, request)
+				payload, err := handler(ctxWithSpan, request)
 				if err != nil {
 					code, description := s.errorEncoder(err)
 					request.Error(code, description, nil)
@@ -225,6 +222,9 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 	); err != nil {
 		return err
 	}
+	if s.endpointAddHandler != nil {
+		s.endpointAddHandler(service, "sendmessage", sendMessageSubject)
+	}
 	getMessageSubject := s.getSubject("customname", "fetchmessage", s.subjectPrefix)
 	getMessageRequestSchema, err := json.Marshal(*jsonschema.Reflect(GetMessageRequest{}))
 	if err != nil {
@@ -239,6 +239,15 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 		micro.ContextHandler(
 			ctx,
 			func(ctx context.Context, request micro.Request) {
+				ctxWithSpan := ctx
+				if s.tracer != nil {
+					spanCtx, err := s.tracer.Extract(opentracing.HTTPHeaders, request.Headers())
+					if err == nil {
+						span := s.tracer.StartSpan("fetchmessage", opentracing.ChildOf(spanCtx))
+						defer span.Finish()
+						ctxWithSpan = opentracing.ContextWithSpan(ctx, span)
+					}
+				}
 				handler := func(ctx context.Context, request micro.Request) ([]byte, error) {
 					select {
 					case <-ctx.Done():
@@ -269,7 +278,7 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 						return payload, nil
 					}
 				}
-				payload, err := handler(ctx, request)
+				payload, err := handler(ctxWithSpan, request)
 				if err != nil {
 					code, description := s.errorEncoder(err)
 					request.Error(code, description, nil)
@@ -284,6 +293,9 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 		micro.WithEndpointSubject(getMessageSubject),
 	); err != nil {
 		return err
+	}
+	if s.endpointAddHandler != nil {
+		s.endpointAddHandler(service, "fetchmessage", getMessageSubject)
 	}
 	return nil
 }
@@ -302,9 +314,11 @@ func NewTestServiceRunnable(
 		encoder:             options.Encoder,
 		isValidationEnabled: options.IsValidationEnabled,
 		errorEncoder:        options.ErrorEncoder,
-		errorHandler:        options.ErrorHandler,
-		doneHandler:         options.DoneHandler,
+		errorHandler:        options.Hooks.ErrorHandler,
+		doneHandler:         options.Hooks.DoneHandler,
+		startHandler:        options.Hooks.StartHandler,
 		subjectPrefix:       options.SubjectPrefix,
+		endpointAddHandler:  options.Hooks.EndpointAddHandler,
 		getSubject:          options.GetSubject,
 	}
 }

@@ -6,6 +6,7 @@ require (
 	github.com/alecthomas/jsonschema v0.0.0-20220216202328-9eeeec9d044b
 	github.com/envoyproxy/protoc-gen-validate v1.0.1
 	github.com/nats-io/nats.go v1.25.0
+	github.com/opentracing/opentracing-go v1.2.0
 	google.golang.org/protobuf v1.30.0
 )
 
