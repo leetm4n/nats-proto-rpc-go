@@ -206,9 +206,9 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 		micro.ContextHandler(
 			ctx,
 			func(ctx context.Context, request micro.Request) {
-				ctx, span := s.tracer.Start(ctx, "sendmessage", trace.WithSpanKind(trace.SpanKindServer))
+				ctxWithTrace := s.propagator.Extract(ctx, telemetry.NatsHeaderCarrierFromNatsHeader(request.Headers()))
+				ctxWithSpan, span := s.tracer.Start(ctxWithTrace, "sendmessage", trace.WithSpanKind(trace.SpanKindServer))
 				defer span.End()
-				ctxWithSpan := s.propagator.Extract(ctx, telemetry.NatsHeaderCarrierFromNatsHeader(request.Headers()))
 				if span.IsRecording() {
 					span.SetAttributes(
 						attribute.String("nats.serviceVersion", "1.0.0"),
@@ -282,9 +282,9 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 		micro.ContextHandler(
 			ctx,
 			func(ctx context.Context, request micro.Request) {
-				ctx, span := s.tracer.Start(ctx, "fetchmessage", trace.WithSpanKind(trace.SpanKindServer))
+				ctxWithTrace := s.propagator.Extract(ctx, telemetry.NatsHeaderCarrierFromNatsHeader(request.Headers()))
+				ctxWithSpan, span := s.tracer.Start(ctxWithTrace, "fetchmessage", trace.WithSpanKind(trace.SpanKindServer))
 				defer span.End()
-				ctxWithSpan := s.propagator.Extract(ctx, telemetry.NatsHeaderCarrierFromNatsHeader(request.Headers()))
 				if span.IsRecording() {
 					span.SetAttributes(
 						attribute.String("nats.serviceVersion", "1.0.0"),
