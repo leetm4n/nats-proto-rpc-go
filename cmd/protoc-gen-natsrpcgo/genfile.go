@@ -2,7 +2,7 @@ package main
 
 import (
 	natsrpcv1 "github.com/leetm4n/nats-proto-rpc-go/api/proto/nats/rpc/v1"
-	"github.com/leetm4n/nats-proto-rpc-go/internal/generator"
+	generator "github.com/leetm4n/nats-proto-rpc-go/internal/generator"
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
@@ -35,6 +35,7 @@ func generateFile(gen *protogen.Plugin, protoFile *protogen.File, isValidatorEna
 
 func getGenerationTargetServices(services []*protogen.Service) []*protogen.Service {
 	targetServices := []*protogen.Service{}
+
 	for _, service := range services {
 		if isServiceGenerationTarget(service) {
 			targetServices = append(targetServices, service)
@@ -45,9 +46,27 @@ func getGenerationTargetServices(services []*protogen.Service) []*protogen.Servi
 }
 
 func isFileGenerationTarget(file *protogen.File) bool {
-	return proto.GetExtension(file.Proto.Options, natsrpcv1.E_IsFileGenerationTarget.TypeDescriptor().Type()).(bool)
+	isTarget, ok := proto.GetExtension(
+		file.Proto.Options,
+		natsrpcv1.E_IsFileGenerationTarget.TypeDescriptor().Type(),
+	).(bool)
+
+	if !ok {
+		return false
+	}
+
+	return isTarget
 }
 
 func isServiceGenerationTarget(service *protogen.Service) bool {
-	return proto.GetExtension(service.Desc.Options(), natsrpcv1.E_IsServiceGenerationTarget.TypeDescriptor().Type()).(bool)
+	isTarget, ok := proto.GetExtension(
+		service.Desc.Options(),
+		natsrpcv1.E_IsServiceGenerationTarget.TypeDescriptor().Type(),
+	).(bool)
+
+	if !ok {
+		return false
+	}
+
+	return isTarget
 }

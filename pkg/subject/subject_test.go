@@ -1,6 +1,10 @@
-package subject
+package subject_test
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/leetm4n/nats-proto-rpc-go/pkg/subject"
+)
 
 func TestGetSubject(t *testing.T) {
 	type args struct {
@@ -8,6 +12,7 @@ func TestGetSubject(t *testing.T) {
 		methodName    string
 		subjectPrefix string
 	}
+
 	tests := []struct {
 		name string
 		args args
@@ -32,10 +37,11 @@ func TestGetSubject(t *testing.T) {
 			want: "app.us-east1.service.rpc.method",
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := GetSubject(tt.args.serviceName, tt.args.methodName, tt.args.subjectPrefix); got != tt.want {
-				t.Errorf("GetSubject() = %v, want %v", got, tt.want)
+			if got := subject.GetSubject(tt.args.serviceName, tt.args.methodName, tt.args.subjectPrefix); got != tt.want {
+				t.Errorf("subject.GetSubject() = %v, want %v", got, tt.want)
 			}
 		})
 	}

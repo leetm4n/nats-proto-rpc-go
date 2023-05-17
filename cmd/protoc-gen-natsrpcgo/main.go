@@ -10,7 +10,11 @@ import (
 const SupportedFeatures = uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 
 func main() {
-	isValidatorEnabled := flag.Bool("with_pb_validate", false, "generates validation code into handlers using protoc-gen-validate generated code")
+	isValidatorEnabled := flag.Bool(
+		"with_pb_validate",
+		false,
+		"generates validation code into handlers using protoc-gen-validate generated code",
+	)
 
 	protogen.Options{
 		ParamFunc: flag.Set,
@@ -26,6 +30,7 @@ func main() {
 		}
 
 		gen.SupportedFeatures = SupportedFeatures
+
 		return nil
 	})
 }

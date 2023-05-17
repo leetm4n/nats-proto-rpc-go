@@ -17,12 +17,14 @@ type Options struct {
 	GetSubject          subject.GetSubjectFn
 	Timeout             time.Duration
 	ErrorDecoder        ErrorDecoderFn
-	Telemetry           telemetry.TelemetryOptions
+	Telemetry           telemetry.Options
 }
 
 type ErrorDecoderFn func(code string, description string) error
 
-func getErrorCodeAndDescriptionFromHeader(header nats.Header) (code string, description string) {
+func getErrorCodeAndDescriptionFromHeader(header nats.Header) (string, string) {
+	var code, description string
+
 	errCode := header[micro.ErrorCodeHeader]
 	if len(errCode) == 1 {
 		code = errCode[0]
@@ -33,7 +35,7 @@ func getErrorCodeAndDescriptionFromHeader(header nats.Header) (code string, desc
 		description = errDescription[0]
 	}
 
-	return
+	return code, description
 }
 
 func DecodeErrorFromHeaderWithDecoder(header nats.Header, errorDecoder ErrorDecoderFn) error {

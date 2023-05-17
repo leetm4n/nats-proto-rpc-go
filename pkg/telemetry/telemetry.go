@@ -5,7 +5,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-type TelemetryOptions struct {
+type Options struct {
 	Tracer     trace.Tracer
 	Propagator propagation.TextMapPropagator
 }

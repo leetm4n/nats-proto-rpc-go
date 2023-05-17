@@ -101,3 +101,10 @@ linters:
 
     # Errors running linter: Other
     # - goimports
+
+issues:
+  exclude-rules:
+    - path: internal/generator/generator.go
+      linters:
+        - funlen # Generator has a lot of statements per each fn body generated
+        - lll  # Generator has a lot of long lines to be visually understandable

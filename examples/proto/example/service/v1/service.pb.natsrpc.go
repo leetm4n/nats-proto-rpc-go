@@ -14,7 +14,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/attribute"
-	"github.com/leetm4n/nats-proto-rpc-go/pkg/runnable"
+	"github.com/leetm4n/nats-proto-rpc-go/pkg/service"
 	"github.com/leetm4n/nats-proto-rpc-go/pkg/client"
 	"github.com/leetm4n/nats-proto-rpc-go/pkg/encoder"
 	"github.com/leetm4n/nats-proto-rpc-go/pkg/subject"
@@ -161,28 +161,29 @@ func NewTestServiceClient(options client.Options) TestServiceClient {
 	}
 }
 
-type testServiceServerRunnable struct {
-	testServiceServer   TestServiceServer
-	service             micro.Service
-	natsConnection      *nats.Conn
-	encoder             encoder.Encoder
-	isValidationEnabled bool
-	errorEncoder        runnable.ErrorEncoderFn
-	errorHandler        micro.ErrHandler
-	doneHandler         micro.DoneHandler
-	startHandler        micro.DoneHandler
-	endpointAddHandler  runnable.EndpointAddHandlerFn
-	subjectPrefix       string
-	getSubject          subject.GetSubjectFn
-	tracer              trace.Tracer
-	propagator          propagation.TextMapPropagator
+type testServiceServerNatsMicroService struct {
+	testServiceServer        TestServiceServer
+	service                  micro.Service
+	natsConnection           *nats.Conn
+	encoder                  encoder.Encoder
+	isValidationEnabled      bool
+	errorEncoder             service.ErrorEncoderFn
+	subscriptionErrorHandler micro.ErrHandler
+	doneHandler              micro.DoneHandler
+	startHandler             micro.DoneHandler
+	endpointAddHandler       service.EndpointAddHandlerFn
+	subjectPrefix            string
+	getSubject               subject.GetSubjectFn
+	tracer                   trace.Tracer
+	propagator               propagation.TextMapPropagator
+	responseErrorHandler     service.ResponseErrorHandlerFn
 }
 
-func (s *testServiceServerRunnable) Run(ctx context.Context) error {
+func (s *testServiceServerNatsMicroService) Run(ctx context.Context) error {
 	service, err := micro.AddService(s.natsConnection, micro.Config{
 		Name:         "customname",
 		Version:      "1.0.0",
-		ErrorHandler: s.errorHandler,
+		ErrorHandler: s.subscriptionErrorHandler,
 		DoneHandler:  s.doneHandler,
 	})
 	if err != nil {
@@ -252,9 +253,17 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 					span.RecordError(err)
 					span.SetStatus(codes.Error, err.Error())
 					code, description := s.errorEncoder(err)
-					request.Error(code, description, nil)
+					if err := request.Error(code, description, nil); err != nil {
+						s.responseErrorHandler(err)
+						span.RecordError(err)
+						span.SetStatus(codes.Error, err.Error())
+					}
 				}
-				request.Respond(payload)
+				if err := request.Respond(payload); err != nil {
+					s.responseErrorHandler(err)
+					span.RecordError(err)
+					span.SetStatus(codes.Error, err.Error())
+				}
 			},
 		),
 		micro.WithEndpointSchema(&micro.Schema{
@@ -328,9 +337,17 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 					span.RecordError(err)
 					span.SetStatus(codes.Error, err.Error())
 					code, description := s.errorEncoder(err)
-					request.Error(code, description, nil)
+					if err := request.Error(code, description, nil); err != nil {
+						s.responseErrorHandler(err)
+						span.RecordError(err)
+						span.SetStatus(codes.Error, err.Error())
+					}
 				}
-				request.Respond(payload)
+				if err := request.Respond(payload); err != nil {
+					s.responseErrorHandler(err)
+					span.RecordError(err)
+					span.SetStatus(codes.Error, err.Error())
+				}
 			},
 		),
 		micro.WithEndpointSchema(&micro.Schema{
@@ -347,27 +364,28 @@ func (s *testServiceServerRunnable) Run(ctx context.Context) error {
 	return nil
 }
 
-func (s *testServiceServerRunnable) GetNatsMicroService() micro.Service {
+func (s *testServiceServerNatsMicroService) GetNatsMicroService() micro.Service {
 	return s.service
 }
 
-func NewTestServiceRunnable(
+func NewTestServiceNatsMicroService(
 	testServiceServer TestServiceServer,
-	options runnable.Options,
-) runnable.Runnable {
-	return &testServiceServerRunnable{
-		testServiceServer:   testServiceServer,
-		natsConnection:      options.NatsConnection,
-		encoder:             options.Encoder,
-		isValidationEnabled: options.IsValidationEnabled,
-		errorEncoder:        options.ErrorEncoder,
-		errorHandler:        options.Hooks.ErrorHandler,
-		doneHandler:         options.Hooks.DoneHandler,
-		startHandler:        options.Hooks.StartHandler,
-		subjectPrefix:       options.SubjectPrefix,
-		endpointAddHandler:  options.Hooks.EndpointAddHandler,
-		getSubject:          options.GetSubject,
-		propagator:          options.Telemetry.Propagator,
-		tracer:              options.Telemetry.Tracer,
+	options service.Options,
+) *testServiceServerNatsMicroService {
+	return &testServiceServerNatsMicroService{
+		testServiceServer:        testServiceServer,
+		natsConnection:           options.NatsConnection,
+		encoder:                  options.Encoder,
+		isValidationEnabled:      options.IsValidationEnabled,
+		errorEncoder:             options.ErrorEncoder,
+		subscriptionErrorHandler: options.Hooks.SubscriptionErrorHandler,
+		doneHandler:              options.Hooks.DoneHandler,
+		startHandler:             options.Hooks.StartHandler,
+		subjectPrefix:            options.SubjectPrefix,
+		endpointAddHandler:       options.Hooks.EndpointAddHandler,
+		responseErrorHandler:     options.Hooks.ResponseErrorHandler,
+		getSubject:               options.GetSubject,
+		propagator:               options.Telemetry.Propagator,
+		tracer:                   options.Telemetry.Tracer,
 	}
 }
