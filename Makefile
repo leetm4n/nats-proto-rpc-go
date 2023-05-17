@@ -73,3 +73,9 @@ check-vulnerabilities:
 test:
 	@printf $(COLOR) "Testing..."
 	@go test -race ./...
+
+##### Dependencies #####
+.PHONY: install
+install:
+	@printf $(COLOR) "Install Dependencies..."
+	@go mod download
