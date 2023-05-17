@@ -1,5 +1,5 @@
-PATH := $(shell go env GOPATH)/bin:$(PATH)
 ROOT_DIR = $(shell pwd)
+PATH := $(ROOT_DIR)/bin:$(shell go env GOPATH)/bin:$(PATH)
 COLOR := "\e[1;36m%s\e[0m\n"
 PROTO_ROOT := $(ROOT_DIR)/api/proto
 PROTO_EXAMPLE_ROOT := $(ROOT_DIR)/examples/proto

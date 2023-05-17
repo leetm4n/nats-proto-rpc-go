@@ -130,6 +130,7 @@ func (g *Generator) addPackageName() {
 }
 
 func (g *Generator) addServiceServerInterface(service *protogen.Service) {
+	g.gen.P(fmt.Sprintf("// %sServer should be implemented", service.GoName))
 	g.gen.P(fmt.Sprintf("type %sServer interface {", service.GoName))
 
 	for _, method := range service.Methods {
@@ -160,7 +161,7 @@ func (g *Generator) addServiceClientImplementation(service *protogen.Service) {
 func (g *Generator) addServiceClientImplHandlers(service *protogen.Service) {
 	for _, method := range service.Methods {
 		g.addEmptyLine()
-		g.gen.P(fmt.Sprintf("func (c *%sClient) %s(ctx context.Context, req *%s, subjectPrefix string) (*%s, error) {", firstLetterToLower(service.GoName), method.GoName, method.Input.GoIdent.GoName, method.Output.GoIdent.GoName))
+		g.gen.P(fmt.Sprintf("func (c *%sNatsClient) %s(ctx context.Context, req *%s, subjectPrefix string) (*%s, error) {", service.GoName, method.GoName, method.Input.GoIdent.GoName, method.Output.GoIdent.GoName))
 		g.gen.P("  header := telemetry.NatsHeaderCarrier{}")
 		g.gen.P(fmt.Sprintf("  ctx, span := c.tracer.Start(ctx, \"%s\", trace.WithSpanKind(trace.SpanKindClient))", g.getMethodSubject(method)))
 		g.gen.P("  defer span.End()")
@@ -224,7 +225,9 @@ func (g *Generator) addServiceClientImplHandlers(service *protogen.Service) {
 }
 
 func (g *Generator) addServiceClientImplStruct(service *protogen.Service) {
-	g.gen.P(fmt.Sprintf("type %sClient struct {", firstLetterToLower(service.GoName)))
+	g.gen.P("// type check.")
+	g.gen.P(fmt.Sprintf("var _ %sClient = (*%sNatsClient)(nil)", service.GoName, service.GoName))
+	g.gen.P(fmt.Sprintf("type %sNatsClient struct {", service.GoName))
 	g.gen.P("  natsConnection *nats.Conn")
 	g.gen.P("  encoder encoder.Encoder")
 	g.gen.P("  isValidationEnabled bool")
@@ -237,8 +240,8 @@ func (g *Generator) addServiceClientImplStruct(service *protogen.Service) {
 }
 
 func (g *Generator) addServiceClientImplementationConstructor(service *protogen.Service) {
-	g.gen.P(fmt.Sprintf("func New%sClient(options client.Options) %sClient {", service.GoName, service.GoName))
-	g.gen.P(fmt.Sprintf("  return &%s{", fmt.Sprintf("%sClient", firstLetterToLower(service.GoName))))
+	g.gen.P(fmt.Sprintf("func New%sNatsClient(options client.Options) *%sNatsClient {", service.GoName, service.GoName))
+	g.gen.P(fmt.Sprintf("  return &%s{", fmt.Sprintf("%sNatsClient", service.GoName)))
 	g.gen.P("    natsConnection: options.NatsConnection,")
 	g.gen.P("    encoder: options.Encoder,")
 	g.gen.P("    isValidationEnabled: options.IsValidationEnabled,")
@@ -259,7 +262,7 @@ func (g *Generator) addServiceServerNatsMicroService(service *protogen.Service) 
 }
 
 func (g *Generator) addServiceServerNatsMicroServiceImplStruct(service *protogen.Service) {
-	g.gen.P(fmt.Sprintf("type %sServerNatsMicroService struct {", firstLetterToLower(service.GoName)))
+	g.gen.P(fmt.Sprintf("type %sNatsMicroServiceWrapper struct {", service.GoName))
 	g.gen.P(fmt.Sprintf("  %sServer %sServer", firstLetterToLower(service.GoName), service.GoName))
 	g.gen.P("  service micro.Service")
 	g.gen.P("  natsConnection      *nats.Conn")
@@ -279,7 +282,7 @@ func (g *Generator) addServiceServerNatsMicroServiceImplStruct(service *protogen
 }
 
 func (g *Generator) addServiceServerNatsMicroServiceImpl(service *protogen.Service) {
-	g.gen.P(fmt.Sprintf("func (s *%sServerNatsMicroService) Run(ctx context.Context) error {", firstLetterToLower(service.GoName)))
+	g.gen.P(fmt.Sprintf("func (s *%sNatsMicroServiceWrapper) Start(ctx context.Context) error {", service.GoName))
 	g.gen.P("  service, err := micro.AddService(s.natsConnection, micro.Config{")
 	g.gen.P(fmt.Sprintf("    Name:    \"%s\",", g.getServiceSubject(service)))
 	g.gen.P(fmt.Sprintf("	   Version: \"%s\",", g.getServiceVersion(service)))
@@ -392,17 +395,17 @@ func (g *Generator) addServiceServerNatsMicroServiceImpl(service *protogen.Servi
 	g.gen.P("  return nil")
 	g.gen.P("}")
 	g.addEmptyLine()
-	g.gen.P(fmt.Sprintf("func (s *%sServerNatsMicroService) GetNatsMicroService() micro.Service {", firstLetterToLower(service.GoName)))
+	g.gen.P(fmt.Sprintf("func (s *%sNatsMicroServiceWrapper) GetNatsMicroService() micro.Service {", service.GoName))
 	g.gen.P("  return s.service")
 	g.gen.P("}")
 }
 
 func (g *Generator) addServiceServerNatsMicroServiceConstructor(service *protogen.Service) {
-	g.gen.P(fmt.Sprintf("func New%s(", fmt.Sprintf("%sNatsMicroService", service.GoName)))
+	g.gen.P(fmt.Sprintf("func New%s(", fmt.Sprintf("%sNatsMicroServiceWrapper", service.GoName)))
 	g.gen.P(fmt.Sprintf("  %sServer %sServer,", firstLetterToLower(service.GoName), service.GoName))
 	g.gen.P("  options service.Options,")
-	g.gen.P(fmt.Sprintf(") *%sServerNatsMicroService {", firstLetterToLower(service.GoName)))
-	g.gen.P(fmt.Sprintf("  return &%sServerNatsMicroService{", firstLetterToLower(service.GoName)))
+	g.gen.P(fmt.Sprintf(") *%sNatsMicroServiceWrapper {", service.GoName))
+	g.gen.P(fmt.Sprintf("  return &%sNatsMicroServiceWrapper{", service.GoName))
 	g.gen.P(fmt.Sprintf("    %sServer: %sServer,", firstLetterToLower(service.GoName), firstLetterToLower(service.GoName)))
 	g.gen.P("    natsConnection: options.NatsConnection,")
 	g.gen.P("    encoder: options.Encoder,")

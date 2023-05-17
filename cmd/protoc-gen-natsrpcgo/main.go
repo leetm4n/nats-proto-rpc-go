@@ -18,6 +18,9 @@ func main() {
 
 	protogen.Options{
 		ParamFunc: flag.Set,
+		ImportRewriteFunc: func(path protogen.GoImportPath) protogen.GoImportPath {
+			return path
+		},
 	}.Run(func(gen *protogen.Plugin) error {
 		for _, file := range gen.Files {
 			// if file does not need to be generated or missing services then skip

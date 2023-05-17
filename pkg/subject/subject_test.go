@@ -7,6 +7,8 @@ import (
 )
 
 func TestGetSubject(t *testing.T) {
+	t.Parallel()
+
 	type args struct {
 		serviceName   string
 		methodName    string
@@ -38,10 +40,18 @@ func TestGetSubject(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := subject.GetSubject(tt.args.serviceName, tt.args.methodName, tt.args.subjectPrefix); got != tt.want {
-				t.Errorf("subject.GetSubject() = %v, want %v", got, tt.want)
+	for _, test := range tests {
+		test := test
+
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := subject.GetSubject(
+				test.args.serviceName,
+				test.args.methodName,
+				test.args.subjectPrefix,
+			); got != test.want {
+				t.Errorf("subject.GetSubject() = %v, want %v", got, test.want)
 			}
 		})
 	}

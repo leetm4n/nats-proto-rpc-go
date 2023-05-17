@@ -21,6 +21,7 @@ import (
 	"github.com/leetm4n/nats-proto-rpc-go/pkg/telemetry"
 )
 
+// TestServiceServer should be implemented
 type TestServiceServer interface {
 	SendMessage(ctx context.Context, req *SendMessageRequest) (res *SendMessageResponse, err error)
 	GetMessage(ctx context.Context, req *GetMessageRequest) (res *GetMessageResponse, err error)
@@ -31,7 +32,10 @@ type TestServiceClient interface {
 	GetMessage(ctx context.Context, req *GetMessageRequest, subjectPrefix string) (res *GetMessageResponse, err error)
 }
 
-type testServiceClient struct {
+// type check.
+var _ TestServiceClient = (*TestServiceNatsClient)(nil)
+
+type TestServiceNatsClient struct {
 	natsConnection      *nats.Conn
 	encoder             encoder.Encoder
 	isValidationEnabled bool
@@ -42,7 +46,7 @@ type testServiceClient struct {
 	propagator          propagation.TextMapPropagator
 }
 
-func (c *testServiceClient) SendMessage(ctx context.Context, req *SendMessageRequest, subjectPrefix string) (*SendMessageResponse, error) {
+func (c *TestServiceNatsClient) SendMessage(ctx context.Context, req *SendMessageRequest, subjectPrefix string) (*SendMessageResponse, error) {
 	header := telemetry.NatsHeaderCarrier{}
 	ctx, span := c.tracer.Start(ctx, "sendmessage", trace.WithSpanKind(trace.SpanKindClient))
 	defer span.End()
@@ -95,7 +99,7 @@ func (c *testServiceClient) SendMessage(ctx context.Context, req *SendMessageReq
 	return result, nil
 }
 
-func (c *testServiceClient) GetMessage(ctx context.Context, req *GetMessageRequest, subjectPrefix string) (*GetMessageResponse, error) {
+func (c *TestServiceNatsClient) GetMessage(ctx context.Context, req *GetMessageRequest, subjectPrefix string) (*GetMessageResponse, error) {
 	header := telemetry.NatsHeaderCarrier{}
 	ctx, span := c.tracer.Start(ctx, "fetchmessage", trace.WithSpanKind(trace.SpanKindClient))
 	defer span.End()
@@ -148,8 +152,8 @@ func (c *testServiceClient) GetMessage(ctx context.Context, req *GetMessageReque
 	return result, nil
 }
 
-func NewTestServiceClient(options client.Options) TestServiceClient {
-	return &testServiceClient{
+func NewTestServiceNatsClient(options client.Options) *TestServiceNatsClient {
+	return &TestServiceNatsClient{
 		natsConnection:      options.NatsConnection,
 		encoder:             options.Encoder,
 		isValidationEnabled: options.IsValidationEnabled,
@@ -161,7 +165,7 @@ func NewTestServiceClient(options client.Options) TestServiceClient {
 	}
 }
 
-type testServiceServerNatsMicroService struct {
+type TestServiceNatsMicroServiceWrapper struct {
 	testServiceServer        TestServiceServer
 	service                  micro.Service
 	natsConnection           *nats.Conn
@@ -179,7 +183,7 @@ type testServiceServerNatsMicroService struct {
 	responseErrorHandler     service.ResponseErrorHandlerFn
 }
 
-func (s *testServiceServerNatsMicroService) Run(ctx context.Context) error {
+func (s *TestServiceNatsMicroServiceWrapper) Start(ctx context.Context) error {
 	service, err := micro.AddService(s.natsConnection, micro.Config{
 		Name:         "customname",
 		Version:      "1.0.0",
@@ -364,15 +368,15 @@ func (s *testServiceServerNatsMicroService) Run(ctx context.Context) error {
 	return nil
 }
 
-func (s *testServiceServerNatsMicroService) GetNatsMicroService() micro.Service {
+func (s *TestServiceNatsMicroServiceWrapper) GetNatsMicroService() micro.Service {
 	return s.service
 }
 
-func NewTestServiceNatsMicroService(
+func NewTestServiceNatsMicroServiceWrapper(
 	testServiceServer TestServiceServer,
 	options service.Options,
-) *testServiceServerNatsMicroService {
-	return &testServiceServerNatsMicroService{
+) *TestServiceNatsMicroServiceWrapper {
+	return &TestServiceNatsMicroServiceWrapper{
 		testServiceServer:        testServiceServer,
 		natsConnection:           options.NatsConnection,
 		encoder:                  options.Encoder,

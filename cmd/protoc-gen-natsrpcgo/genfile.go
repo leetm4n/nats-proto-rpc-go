@@ -2,8 +2,7 @@ package main
 
 import (
 	natsrpcv1 "github.com/leetm4n/nats-proto-rpc-go/api/proto/nats/rpc/v1"
-	generator "github.com/leetm4n/nats-proto-rpc-go/internal/generator"
-
+	"github.com/leetm4n/nats-proto-rpc-go/internal/generator"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 )

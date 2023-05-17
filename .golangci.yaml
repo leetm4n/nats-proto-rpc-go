@@ -89,18 +89,18 @@ linters:
     - wsl
 
     # Disabled, revisit later
-    # - exhaustruct
-    # - gci
-    # - gofumpt
-    # - paralleltest
+    - exhaustruct
+    - gci
+    - gofumpt
+    - paralleltest
 
     # Errors running linter: Disabled because of generics
-    # - rowserrcheck
-    # - sqlclosecheck
-    # - wastedassign
+    - rowserrcheck
+    - sqlclosecheck
+    - wastedassign
 
     # Errors running linter: Other
-    # - goimports
+    - goimports
 
 issues:
   exclude-rules:
