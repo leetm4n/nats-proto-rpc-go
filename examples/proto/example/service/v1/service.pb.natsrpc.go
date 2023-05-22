@@ -21,8 +21,8 @@ import (
 	"github.com/leetm4n/nats-proto-rpc-go/pkg/telemetry"
 )
 
-// TestServiceServer should be implemented
-type TestServiceServer interface {
+// TestServiceHandler should be implemented
+type TestServiceHandler interface {
 	SendMessage(ctx context.Context, req *SendMessageRequest) (res *SendMessageResponse, err error)
 	GetMessage(ctx context.Context, req *GetMessageRequest) (res *GetMessageResponse, err error)
 }
@@ -166,7 +166,7 @@ func NewTestServiceNatsClient(options client.Options) *TestServiceNatsClient {
 }
 
 type TestServiceNatsMicroServiceWrapper struct {
-	testServiceServer        TestServiceServer
+	testServiceHandler       TestServiceHandler
 	service                  micro.Service
 	natsConnection           *nats.Conn
 	encoder                  encoder.Encoder
@@ -236,7 +236,7 @@ func (s *TestServiceNatsMicroServiceWrapper) Start(ctx context.Context) error {
 								return nil, err
 							}
 						}
-						res, err := s.testServiceServer.SendMessage(ctx, req)
+						res, err := s.testServiceHandler.SendMessage(ctx, req)
 						if err != nil {
 							return nil, err
 						}
@@ -320,7 +320,7 @@ func (s *TestServiceNatsMicroServiceWrapper) Start(ctx context.Context) error {
 								return nil, err
 							}
 						}
-						res, err := s.testServiceServer.GetMessage(ctx, req)
+						res, err := s.testServiceHandler.GetMessage(ctx, req)
 						if err != nil {
 							return nil, err
 						}
@@ -373,11 +373,11 @@ func (s *TestServiceNatsMicroServiceWrapper) GetNatsMicroService() micro.Service
 }
 
 func NewTestServiceNatsMicroServiceWrapper(
-	testServiceServer TestServiceServer,
+	testServiceHandler TestServiceHandler,
 	options service.Options,
 ) *TestServiceNatsMicroServiceWrapper {
 	return &TestServiceNatsMicroServiceWrapper{
-		testServiceServer:        testServiceServer,
+		testServiceHandler:       testServiceHandler,
 		natsConnection:           options.NatsConnection,
 		encoder:                  options.Encoder,
 		isValidationEnabled:      options.IsValidationEnabled,
