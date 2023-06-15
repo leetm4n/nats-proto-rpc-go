@@ -14,7 +14,6 @@ linters:
     - contextcheck
     - cyclop
     - decorder
-    - depguard
     - dogsled
     - dupl
     - dupword
@@ -87,20 +86,17 @@ linters:
     - whitespace
     - wrapcheck
     - wsl
-
-    # Disabled, revisit later
     - exhaustruct
     - gci
     - gofumpt
     - paralleltest
-
-    # Errors running linter: Disabled because of generics
     - rowserrcheck
     - sqlclosecheck
     - wastedassign
-
-    # Errors running linter: Other
     - goimports
+
+    # Disabled, revisit later
+    # - depguard
 
 issues:
   exclude-rules:
