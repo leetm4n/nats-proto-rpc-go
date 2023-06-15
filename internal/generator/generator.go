@@ -371,6 +371,7 @@ func (g *Generator) addServiceHandlerNatsMicroServiceImpl(service *protogen.Serv
 		g.gen.P("            span.RecordError(err)")
 		g.gen.P("            span.SetStatus(codes.Error, err.Error())")
 		g.gen.P("          }")
+		g.gen.P("          return")
 		g.gen.P("        }")
 		g.gen.P("        if err := request.Respond(payload); err != nil {")
 		g.gen.P("          s.responseErrorHandler(err)")
