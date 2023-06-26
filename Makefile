@@ -20,22 +20,17 @@ codegen-proto:
 	@(cd $(PROTO_ROOT) && buf generate)
 
 ##### Example proto to go generation #####
-.PHONY: codegen-proto-example
-codegen-proto-example:
-	@printf $(COLOR) "Generating proto..."
-	@(cd $(PROTO_EXAMPLE_ROOT) && buf generate)
-
 .PHONY: codegen-proto-example-local
 codegen-proto-example-local:
 	make build-codegenerator
 	@printf $(COLOR) "Generating proto..."
 	@(cd $(PROTO_EXAMPLE_ROOT) && buf generate --template buf.gen.local.yaml)
 
-##### Build protoc-gem-natsrpcgo #####
+##### Build protoc-gen-natsrpcgo #####
 .PHONY: build-codegenerator
 build-codegenerator:
 	@printf $(COLOR) "Building generator plugin..."
-	@go build -o bin/ ./cmd/protoc-gen-natsrpcgo
+	@go build -o bin/ ./cmd/protoc-gen-natsrpc-go
 
 ##### Build #####
 .PHONY: build

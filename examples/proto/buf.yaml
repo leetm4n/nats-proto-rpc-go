@@ -11,4 +11,5 @@ lint:
 
 deps:
   - buf.build/googleapis/googleapis
+  - buf.build/clr/nats-proto-rpc-go
   - buf.build/envoyproxy/protoc-gen-validate

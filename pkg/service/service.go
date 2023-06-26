@@ -31,4 +31,4 @@ type ResponseErrorHandlerFn func(err error)
 
 type EndpointAddHandlerFn func(service micro.Service, methodName, subject string)
 
-type ErrorEncoderFn func(err error) (code string, description string)
+type ErrorEncoderFn func(err error) (code string, description string, payload []byte)

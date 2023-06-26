@@ -20,7 +20,7 @@ type Options struct {
 	Telemetry           telemetry.Options
 }
 
-type ErrorDecoderFn func(code string, description string) error
+type ErrorDecoderFn func(code string, description string, payload []byte) error
 
 func getErrorCodeAndDescriptionFromHeader(header nats.Header) (string, string) {
 	var code, description string
@@ -38,12 +38,12 @@ func getErrorCodeAndDescriptionFromHeader(header nats.Header) (string, string) {
 	return code, description
 }
 
-func DecodeErrorFromHeaderWithDecoder(header nats.Header, errorDecoder ErrorDecoderFn) error {
+func DecodeErrorWithDecoder(header nats.Header, payload []byte, errorDecoder ErrorDecoderFn) error {
 	code, description := getErrorCodeAndDescriptionFromHeader(header)
 
 	if code == "" {
 		return nil
 	}
 
-	return errorDecoder(code, description)
+	return errorDecoder(code, description, payload)
 }

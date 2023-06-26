@@ -2,6 +2,11 @@
 version: v1
 deps:
   - remote: buf.build
+    owner: clr
+    repository: nats-proto-rpc-go
+    commit: a1ba410d401b430fa1b995eaa603c616
+    digest: shake256:76c18b9c06a3748de03be79c336ce8bcbe0f65dd07b86b08c31aa1257ec32c844b953757ec5b39ff7ecbe633b663aaf46cebef79ba98835ac6e811c033230347
+  - remote: buf.build
     owner: envoyproxy
     repository: protoc-gen-validate
     commit: 6607b10f00ed4a3d98f906807131c44a
